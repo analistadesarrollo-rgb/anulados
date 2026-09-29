@@ -26,7 +26,13 @@ pipeline {
 
     stage('Deploy') {
       steps {
-        sh 'docker compose up -d --build --remove-orphans'
+        sh '''
+          if ! docker compose up -d --build --remove-orphans; then
+            docker compose ps
+            docker compose logs --no-color --tail=200 api auth-db
+            exit 1
+          fi
+        '''
       }
     }
 
