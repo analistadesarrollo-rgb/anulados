@@ -3,6 +3,7 @@ import oracledb from 'oracledb';
 import { z } from 'zod';
 import { gambleDb } from '../db.js';
 import { requirePermission } from '../middleware/session.js';
+import type { AuthenticatedRequest } from '../types.js';
 
 export const raspeRouter = Router();
 
@@ -16,12 +17,12 @@ raspeRouter.get('/raspe/search', requirePermission('raspe:search'), async (req, 
   const connection = await oracledb.getPool().getConnection();
   try {
     const [sales, payments] = await Promise.all([
-      connection.execute<Record<string, unknown>[]>(
+      connection.execute<Record<string, unknown>>(
         `SELECT CODIGOVENTA, FECHAVENTA, HORAVENTA, VALOR, VENDEDOR, EMPRESA, 'VENDIDO' ESTADO, ZONA
          FROM GAMBLE.VENTARASPEFISREPL@NAOS_HCI WHERE CODIGOVENTA LIKE '%' || :code || '%'`,
         { code: saleCode }, { outFormat: oracledb.OUT_FORMAT_OBJECT },
       ),
-      connection.execute<Record<string, unknown>[]>(
+      connection.execute<Record<string, unknown>>(
         `SELECT CODIGOVENTA, FECHAPAGO, HORAPAGO, TOTALPREMIO, CAJERO, NOMBRE_ZONA, 'PAGADO' ESTADO, ZONA
          FROM GAMBLE.PAGOPREMIORASPEFISREPL@NAOS_HCI WHERE CODIGOVENTA LIKE '%' || :code || '%'`,
         { code: paymentCode }, { outFormat: oracledb.OUT_FORMAT_OBJECT },
@@ -43,7 +44,7 @@ function toMysqlDate(date: string) {
   return `${year}-${month}-${day}`;
 }
 
-raspeRouter.post('/raspe', requirePermission('raspe:write'), async (req, res) => {
+raspeRouter.post('/raspe', requirePermission('raspe:write'), async (req: AuthenticatedRequest, res) => {
   const parsed = raspeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Datos de registro incompletos o invalidos' });
   const data = parsed.data;

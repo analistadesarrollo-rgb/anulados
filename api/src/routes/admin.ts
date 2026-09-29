@@ -147,14 +147,14 @@ adminRouter.patch('/profiles/:id', requirePermission('profiles:manage'), async (
   const id = Number(req.params.id);
   const parsed = z.object({ name: z.string().trim().min(2).max(100).optional(), permissions: z.array(z.string().min(1).max(100)).max(50).optional() }).safeParse(req.body);
   if (!Number.isSafeInteger(id) || id < 1 || !parsed.success || Object.keys(parsed.data).length === 0) return res.status(400).json({ message: 'Cambios de perfil invalidos' });
-  const [currentRows] = await authDb.execute('SELECT is_system FROM app_profiles WHERE id = ?', [id]);
-  const current = (currentRows as Array<{ is_system: number }>)[0];
+  const [currentRows] = await authDb.execute('SELECT name, is_system FROM app_profiles WHERE id = ?', [id]);
+  const current = (currentRows as Array<{ name: string; is_system: number }>)[0];
   if (!current) return res.status(404).json({ message: 'Perfil no encontrado' });
   if (current.is_system && parsed.data.name !== undefined) return res.status(400).json({ message: 'Los perfiles de sistema no se pueden renombrar' });
-  if (profile.name === 'APLICACIONES' && parsed.data.permissions && ![...protectedPermissions].every((permission) => parsed.data.permissions!.includes(permission))) {
+  if (current.name === 'APLICACIONES' && parsed.data.permissions && ![...protectedPermissions].every((permission) => parsed.data.permissions!.includes(permission))) {
     return res.status(400).json({ message: 'APLICACIONES debe conservar sus permisos administrativos' });
   }
-  if (profile.name !== 'APLICACIONES' && parsed.data.permissions?.some((permission) => protectedPermissions.has(permission))) {
+  if (current.name !== 'APLICACIONES' && parsed.data.permissions?.some((permission) => protectedPermissions.has(permission))) {
     return res.status(400).json({ message: 'Los permisos de administracion son exclusivos del perfil APLICACIONES' });
   }
   const fields: string[] = [];

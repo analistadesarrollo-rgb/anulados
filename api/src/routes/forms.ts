@@ -48,7 +48,7 @@ function allowedZones(profile: string) {
 async function findOracleForm(serie: string, numero: string, zona: number) {
   const connection = await oracledb.getPool().getConnection();
   try {
-    const result = await connection.execute<Record<string, unknown>[]>(oracleFormSql, { serie, numero, zona }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
+    const result = await connection.execute<Record<string, unknown>>(oracleFormSql, { serie, numero, zona }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
     return result.rows?.[0] ?? null;
   } finally {
     await connection.close();
