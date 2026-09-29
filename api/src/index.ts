@@ -4,7 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { ZodError } from 'zod';
 import { env } from './env.js';
-import { initOracle } from './db.js';
+import { OracleConfigurationError } from './db.js';
 import { authRouter } from './routes/auth.js';
 import { adminRouter } from './routes/admin.js';
 import { formsRouter } from './routes/forms.js';
@@ -32,13 +32,9 @@ app.use(env.API_VERSION, api);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof ZodError) return res.status(400).json({ message: 'Solicitud invalida' });
+  if (error instanceof OracleConfigurationError) return res.status(503).json({ message: error.message });
   console.error('API error:', error);
   return res.status(500).json({ message: 'Error interno del servidor' });
 });
 
-initOracle().then(() => {
-  app.listen(env.API_PORT, '0.0.0.0', () => console.log(`API escuchando en puerto ${env.API_PORT}`));
-}).catch((error: unknown) => {
-  console.error('No se pudo inicializar Oracle:', error);
-  process.exit(1);
-});
+app.listen(env.API_PORT, '0.0.0.0', () => console.log(`API escuchando en puerto ${env.API_PORT}`));

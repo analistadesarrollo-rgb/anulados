@@ -22,18 +22,45 @@ if (env.DB_ORACLE_THICK_MODE) {
   oracledb.initOracleClient({ libDir: env.ORACLE_CLIENT_LIB_DIR, configDir: env.ORACLE_CONFIG_DIR });
 }
 
-export async function initOracle() {
-  await oracledb.createPool({
-    user: env.ORACLE_USER,
-    password: env.ORACLE_PASSWORD,
-    connectString: env.ORACLE_CONNECT_STRING,
-    configDir: env.ORACLE_CONFIG_DIR,
-    poolMin: 1,
-    poolMax: 8,
-    poolIncrement: 1,
-  });
+export class OracleConfigurationError extends Error {
+  constructor() {
+    super('Oracle requiere ORACLE_USER, ORACLE_PASSWORD y ORACLE_CONNECT_STRING configurados.');
+    this.name = 'OracleConfigurationError';
+  }
+}
+
+let oraclePoolPromise: ReturnType<typeof oracledb.createPool> | undefined;
+
+async function getOraclePool() {
+  if (!env.ORACLE_USER || !env.ORACLE_PASSWORD || !env.ORACLE_CONNECT_STRING) {
+    throw new OracleConfigurationError();
+  }
+  if (!oraclePoolPromise) {
+    oraclePoolPromise = oracledb.createPool({
+      user: env.ORACLE_USER,
+      password: env.ORACLE_PASSWORD,
+      connectString: env.ORACLE_CONNECT_STRING,
+      configDir: env.ORACLE_CONFIG_DIR,
+      poolMin: 1,
+      poolMax: 8,
+      poolIncrement: 1,
+    });
+  }
+  try {
+    return await oraclePoolPromise;
+  } catch (error) {
+    oraclePoolPromise = undefined;
+    throw error;
+  }
+}
+
+export async function getOracleConnection() {
+  const pool = await getOraclePool();
+  return pool.getConnection();
 }
 
 export async function closePools() {
-  await Promise.all([authDb.end(), gambleDb.end(), personaDb.end(), oracledb.getPool().close(10)]);
+  const pools = [authDb.end(), gambleDb.end(), personaDb.end()];
+  if (oraclePoolPromise) pools.push(oraclePoolPromise.then((pool) => pool.close(10)));
+  await Promise.all(pools);
 }

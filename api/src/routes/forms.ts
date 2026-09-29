@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import oracledb from 'oracledb';
 import { z } from 'zod';
-import { gambleDb } from '../db.js';
+import { gambleDb, getOracleConnection } from '../db.js';
 import { requirePermission } from '../middleware/session.js';
 import type { AuthenticatedRequest } from '../types.js';
 
@@ -46,7 +46,7 @@ function allowedZones(profile: string) {
 }
 
 async function findOracleForm(serie: string, numero: string, zona: number) {
-  const connection = await oracledb.getPool().getConnection();
+  const connection = await getOracleConnection();
   try {
     const result = await connection.execute<Record<string, unknown>>(oracleFormSql, { serie, numero, zona }, { outFormat: oracledb.OUT_FORMAT_OBJECT });
     return result.rows?.[0] ?? null;

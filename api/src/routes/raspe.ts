@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import oracledb from 'oracledb';
 import { z } from 'zod';
-import { gambleDb } from '../db.js';
+import { gambleDb, getOracleConnection } from '../db.js';
 import { requirePermission } from '../middleware/session.js';
 import type { AuthenticatedRequest } from '../types.js';
 
@@ -14,7 +14,7 @@ raspeRouter.get('/raspe/search', requirePermission('raspe:search'), async (req, 
   const paymentCode = raw.replace(/\D/g, '');
   if (!saleCode || !paymentCode) return res.status(400).json({ message: 'El codigo no tiene el formato esperado' });
 
-  const connection = await oracledb.getPool().getConnection();
+  const connection = await getOracleConnection();
   try {
     const [sales, payments] = await Promise.all([
       connection.execute<Record<string, unknown>>(

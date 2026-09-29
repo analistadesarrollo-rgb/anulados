@@ -20,6 +20,8 @@ Replica independiente del sistema de control de formularios anulados. Frontend R
 
 Los accesos a GAMBLE y Oracle se configuran como secretos del entorno de despliegue. El sistema nuevo comparte las tablas de negocio para reflejar el mismo trabajo que el sistema anterior; los usuarios, perfiles y credenciales de V2 se mantienen en su propio esquema `control_anulados_v2_auth`.
 
+Oracle se inicializa al primer uso para que la API y la interfaz puedan arrancar aunque Oracle no este configurado. Las consultas de formularios y raspas responderan `503` hasta que `ORACLE_USER`, `ORACLE_PASSWORD` y `ORACLE_CONNECT_STRING` tengan valores validos en el secreto de despliegue.
+
 La base de GAMBLE debe tener aplicada la migracion existente `sql/mejoras_auditoria.sql`, que agrega `OBSERVACIONES_REGISTRO`, `OBSERVACIONES_AUDITORIA` y sus campos de trazabilidad. V2 no ejecuta esa migracion ni altera la base original. `VITE_PDV_INFO_URL` configura el enlace externo de informacion de equipos PDV para COORDINADOR; el subproyecto no viene en este repositorio.
 
 ## Perfiles
