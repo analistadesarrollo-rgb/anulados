@@ -1,0 +1,13 @@
+{
+  "CENTRAL_DE_SERVICIOS": ["forms:register", "records:central", "records:ti", "reports:central", "reports:ti"],
+  "TECNICO-SERVIRED": ["forms:register", "records:central", "reports:central"],
+  "TECNICO-MULTIRED": ["forms:register", "records:central", "reports:central"],
+  "TECNICO": ["forms:register", "records:ti", "reports:ti"],
+  "COORDINADOR": ["forms:register", "records:ti", "reports:ti", "forms:pdv"],
+  "APLICACIONES": ["raspe:search", "raspe:write", "users:manage", "profiles:manage"],
+  "COMERCIAL-SERVIRED": ["records:commercial", "records:update:commercial", "reports:commercial"],
+  "CONTABILIDAD-SERVIRED": ["records:accounting", "records:update:accounting", "reports:accounting"],
+  "CARTERA": ["records:portfolio", "portfolio:manage"],
+  "AUDITORIA-SERVIRED": ["records:audit", "records:update:audit", "reports:audit"],
+  "AUDITORIA-OPERATIVA": ["records:audit-operations", "records:update:audit-operations", "reports:audit-operations"]
+}
