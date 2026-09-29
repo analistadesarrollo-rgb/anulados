@@ -256,10 +256,10 @@ function Portfolio() {
 }
 
 function UsersPage() {
-  const [users, setUsers] = useState<Array<Record<string, unknown>>>([]);
+  const [users, setUsers] = useState<Array<Record<string, unknown> & { legacyLogin?: string | null }>>([]);
   const [profiles, setProfiles] = useState<Array<{ id: number; name: string }>>([]);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [editing, setEditing] = useState<(Record<string, unknown> & { legacyLogin?: string | null }) | null>(null);
   const [notice, setNotice] = useState('');
   const load = async () => { const [u,p] = await Promise.all([api.get('/admin/users', { params: { q: query } }), api.get('/admin/profiles')]); setUsers(u.data); setProfiles(p.data); };
   useEffect(() => { void load(); }, []);
