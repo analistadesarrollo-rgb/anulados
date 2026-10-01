@@ -48,7 +48,7 @@ pipeline {
             if (err.message?.contains('Could not find credentials entry')) {
               echo "AVISO: el credential 'CONTROL_ANULADOS_USERS_SQL' no esta configurado en Jenkins; se omite la importacion de usuarios."
               echo "      Crear en Manage Jenkins > Credentials > Add Credentials > Secret file con ese ID y el contenido de tbusuario.sql."
-              unstable("Importacion de usuarios omitida: falta el credential 'CONTROL_ANULADOS_USERS_SQL'.")
+              echo "      El deploy no se afecta; la importacion es una operacion opcional de una sola vez."
             } else {
               throw err
             }
