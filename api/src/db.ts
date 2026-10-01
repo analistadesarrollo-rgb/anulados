@@ -29,7 +29,7 @@ export class OracleConfigurationError extends Error {
   }
 }
 
-let oraclePoolPromise: ReturnType<typeof oracledb.createPool> | undefined;
+let oraclePoolPromise: Promise<oracledb.Pool> | undefined;
 
 async function getOraclePool() {
   if (!env.ORACLE_USER || !env.ORACLE_PASSWORD || !env.ORACLE_CONNECT_STRING) {
