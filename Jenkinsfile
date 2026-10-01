@@ -37,10 +37,22 @@ pipeline {
     }
 
     stage('Initialize users (optional)') {
-      when { expression { return params.IMPORT_INITIAL_USERS == true } }
+      when { expression { return params.IMPORT_INITIAL_USERS?.toString()?.toBoolean() } }
       steps {
-        withCredentials([file(credentialsId: 'CONTROL_ANULADOS_USERS_SQL', variable: 'USERS_SQL')]) {
-          sh 'docker compose run --rm --no-deps -v "$USERS_SQL:/run/secrets/tbusuario.sql:ro" api npm run import-users -- /run/secrets/tbusuario.sql'
+        script {
+          try {
+            withCredentials([file(credentialsId: 'CONTROL_ANULADOS_USERS_SQL', variable: 'USERS_SQL')]) {
+              sh 'docker compose run --rm --no-deps -v "$USERS_SQL:/run/secrets/tbusuario.sql:ro" api npm run import-users -- /run/secrets/tbusuario.sql'
+            }
+          } catch (err) {
+            if (err.message?.contains('Could not find credentials entry')) {
+              echo "AVISO: el credential 'CONTROL_ANULADOS_USERS_SQL' no esta configurado en Jenkins; se omite la importacion de usuarios."
+              echo "      Crear en Manage Jenkins > Credentials > Add Credentials > Secret file con ese ID y el contenido de tbusuario.sql."
+              unstable("Importacion de usuarios omitida: falta el credential 'CONTROL_ANULADOS_USERS_SQL'.")
+            } else {
+              throw err
+            }
+          }
         }
       }
     }
