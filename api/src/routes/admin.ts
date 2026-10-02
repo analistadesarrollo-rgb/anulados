@@ -17,6 +17,19 @@ const userSchema = z.object({
 });
 const protectedPermissions = new Set(['users:manage', 'profiles:manage']);
 
+/* Un perfil sin permisos deja la cuenta inutilizable: el login exige al menos
+   uno. Se avisa antes de crearla o reasignarla en lugar de aceptarla. */
+async function usableProfile(profileId: number): Promise<{ error?: string }> {
+  const [rows] = await authDb.execute('SELECT id, name, permissions FROM app_profiles WHERE id = ? LIMIT 1', [profileId]);
+  const profile = (rows as Array<{ id: number; name: string; permissions: string[] | string }>)[0];
+  if (!profile) return { error: 'El perfil seleccionado no existe' };
+  const permissions = typeof profile.permissions === 'string' ? JSON.parse(profile.permissions) as string[] : profile.permissions;
+  if (!Array.isArray(permissions) || permissions.length === 0) {
+    return { error: `El perfil ${profile.name} no tiene permisos: asignaselos en Perfiles antes de usarlo` };
+  }
+  return {};
+}
+
 async function audit(actor: number, action: string, entity: string, id: string, details: object = {}) {
   await authDb.execute(
     'INSERT INTO app_audit_log (actor_id, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)',
@@ -50,8 +63,8 @@ adminRouter.get('/users', manageUsers, async (req, res) => {
 adminRouter.post('/users', manageUsers, async (req: AuthenticatedRequest, res) => {
   const parsed = userSchema.safeParse(req.body);
   if (!parsed.success || !parsed.data.password) return res.status(400).json({ message: 'Completa usuario, nombre, perfil y contrasena de al menos 8 caracteres' });
-  const [profileRows] = await authDb.execute('SELECT id FROM app_profiles WHERE id = ?', [parsed.data.profileId]);
-  if ((profileRows as unknown[]).length === 0) return res.status(400).json({ message: 'El perfil seleccionado no existe' });
+  const target = await usableProfile(parsed.data.profileId);
+  if (target.error) return res.status(400).json({ message: target.error });
   const hash = await bcrypt.hash(parsed.data.password, 12);
   try {
     const [result] = await authDb.execute(
@@ -95,8 +108,8 @@ adminRouter.patch('/users/:id', manageUsers, async (req: AuthenticatedRequest, r
     }
   }
   if (parsed.data.profileId) {
-    const [profiles] = await authDb.execute('SELECT id FROM app_profiles WHERE id = ?', [parsed.data.profileId]);
-    if ((profiles as unknown[]).length === 0) return res.status(400).json({ message: 'El perfil seleccionado no existe' });
+    const target = await usableProfile(parsed.data.profileId);
+    if (target.error) return res.status(400).json({ message: target.error });
   }
   const fields: string[] = [];
   const values: unknown[] = [];

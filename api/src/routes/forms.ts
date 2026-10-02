@@ -106,14 +106,17 @@ formsRouter.post('/forms', requirePermission('forms:register'), async (req: Auth
   }
 });
 
+/* searchWhere replica el comportamiento heredado: al buscar por texto se
+   abandona el filtro de cola para alcanzar cualquier registro del dia; la
+   vista por defecto sigue acotada al estado que le corresponde al perfil. */
 const listPolicies: Record<string, { permission: string; table: string; where: string; searchWhere?: string }> = {
-  servired: { permission: 'records:central', table: 'ANULADOS_NEW_JAMUNDI', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')" },
-  multired: { permission: 'records:central', table: 'ANULADOS_NEW_YUMBO', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')" },
-  ti: { permission: 'records:ti', table: 'ANULADOS_NEW_JAMUNDI', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')" },
-  commercial: { permission: 'records:commercial', table: 'ANULADOS_NEW_JAMUNDI', where: "ESTADO_ENTREGA='P' AND MOTIVO<>'NO IMPRESO'", searchWhere: "MOTIVO<>'NO IMPRESO'" },
-  accounting: { permission: 'records:accounting', table: 'ANULADOS_NEW_JAMUNDI', where: '1 = 1' },
-  audit: { permission: 'records:audit', table: 'ANULADOS_NEW_JAMUNDI', where: "ESTADO='PENDIENTE' AND ESTADO_ENTREGA='S' AND MOTIVO <> 'NO IMPRESO' AND ESTADO <> 'COBRAR'" },
-  'audit-operations': { permission: 'records:audit-operations', table: 'ANULADOS_NEW_JAMUNDI', where: "MOTIVO='NO IMPRESO' AND ESTADO='PENDIENTE' AND ESTADO_ENTREGA='N'" },
+  servired: { permission: 'records:central', table: 'ANULADOS_NEW_JAMUNDI', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')", searchWhere: '1 = 1' },
+  multired: { permission: 'records:central', table: 'ANULADOS_NEW_YUMBO', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')", searchWhere: '1 = 1' },
+  ti: { permission: 'records:ti', table: 'ANULADOS_NEW_JAMUNDI', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')", searchWhere: '1 = 1' },
+  commercial: { permission: 'records:commercial', table: 'ANULADOS_NEW_JAMUNDI', where: "ESTADO_ENTREGA='P' AND MOTIVO<>'NO IMPRESO'", searchWhere: '1 = 1' },
+  accounting: { permission: 'records:accounting', table: 'ANULADOS_NEW_JAMUNDI', where: "ESTADO='AUTORIZADO'" },
+  audit: { permission: 'records:audit', table: 'ANULADOS_NEW_JAMUNDI', where: "ESTADO='PENDIENTE' AND ESTADO_ENTREGA='S' AND MOTIVO <> 'NO IMPRESO'", searchWhere: '1 = 1' },
+  'audit-operations': { permission: 'records:audit-operations', table: 'ANULADOS_NEW_JAMUNDI', where: "MOTIVO='NO IMPRESO' AND ESTADO='PENDIENTE' AND ESTADO_ENTREGA='N'", searchWhere: '1 = 1' },
   portfolio: { permission: 'records:portfolio', table: 'ANULADOS_NEW_JAMUNDI', where: "FECHA=DATE_FORMAT(CURDATE(),'%d/%m/%Y')" },
 };
 
@@ -125,9 +128,7 @@ formsRouter.get('/records/:view', async (req: AuthenticatedRequest, res) => {
   const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
   const offset = (page - 1) * limit;
   const term = String(req.query.q ?? '').trim().slice(0, 100);
-  let baseWhere = term
-    ? policy.searchWhere ?? (['servired', 'multired', 'ti'].includes(req.params.view) ? '1 = 1' : policy.where)
-    : policy.where;
+  let baseWhere = term ? policy.searchWhere ?? policy.where : policy.where;
   let filter = term ? ` AND (CODIGO LIKE ? OR FECHA LIKE ? OR SERIE LIKE ? OR DOCUMENTO_C LIKE ? OR ESTADO_ENTREGA LIKE ? OR ESTADO LIKE ? OR MOTIVO LIKE ?)` : '';
   let values: Array<string | number> = term ? Array(7).fill(`%${term}%`) : [];
   const dateFrom = String(req.query.dateFrom ?? '');
@@ -323,12 +324,4 @@ formsRouter.patch('/records/:serie/accounting', requirePermission('records:updat
     await connection.rollback();
     throw error;
   } finally { connection.release(); }
-});
-
-formsRouter.patch('/records/:usuario/portfolio', requirePermission('portfolio:manage'), async (req, res) => {
-  const parsed = z.object({ estado: z.enum(['S', 'N']) }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: 'Estado de cartera invalido' });
-  const [result] = await gambleDb.execute('UPDATE CARTERA SET ESTADO=? WHERE USUARIO=?', [parsed.data.estado, req.params.usuario]);
-  if ((result as { affectedRows: number }).affectedRows === 0) return res.status(404).json({ message: 'Usuario de cartera no encontrado' });
-  return res.json({ message: 'Cartera actualizada' });
 });

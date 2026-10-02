@@ -37,3 +37,10 @@ const schema = z.object({
 });
 
 export const env = schema.parse(process.env);
+
+const ttlPattern = /^(\d+)([smhd])$/.exec(env.JWT_TTL);
+if (!ttlPattern) throw new Error(`JWT_TTL invalido: ${env.JWT_TTL}. Usa un valor como 30m, 45m o 8h.`);
+const ttlUnitMs: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+export const sessionTtlMs = Number(ttlPattern[1]) * ttlUnitMs[ttlPattern[2]];
+export const sessionTtlSeconds = sessionTtlMs / 1000;
+export const sessionTtlMinutes = Math.max(1, Math.round(sessionTtlMs / 60000));

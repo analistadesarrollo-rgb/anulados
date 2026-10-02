@@ -5,6 +5,63 @@ import { api } from './api';
 import { useAuth } from './auth';
 
 type NavEntry = { path: string; label: string; permission: string; icon: typeof Activity };
+
+/* Mismas columnas y rotulos que mostraban los listados del sistema legado.
+   PREMIO existe en la tabla pero nunca se mostro en pantalla. */
+const recordColumns: Array<{ column: string; label: string }> = [
+  { column: 'CODIGO', label: 'Codigo' },
+  { column: 'FECHA', label: 'Fecha form.' },
+  { column: 'HORA', label: 'Hora form.' },
+  { column: 'SERIE', label: 'Serie' },
+  { column: 'CONSECUTIVO', label: 'Consecutivo' },
+  { column: 'LOTERIA', label: 'Loteria' },
+  { column: 'HORA_FINAL', label: 'Hora final' },
+  { column: 'VALOR', label: 'Valor' },
+  { column: 'UTILIDAD_C', label: 'Utilidad' },
+  { column: 'DOCUMENTO_C', label: 'Documento col.' },
+  { column: 'NOMBRE_C', label: 'Nombre col.' },
+  { column: 'MOTIVO', label: 'Motivo' },
+  { column: 'HORA_CONSULTA', label: 'Hora consulta' },
+  { column: 'LOGIN', label: 'Login motivo' },
+  { column: 'ESTADO', label: 'Estado sol.' },
+  { column: 'CREADOR_R', label: 'Creador' },
+  { column: 'ESTADO_ENTREGA', label: 'Estado entrega' },
+  { column: 'NOTA', label: 'Causal' },
+];
+
+const recordDetailFields = [
+  ...recordColumns.map((item) => item.column),
+  'OBSERVACIONES_REGISTRO', 'OBSERVACIONES_AUDITORIA', 'USUARIO_AUDITORIA', 'FECHA_ACTUALIZACION',
+];
+
+/* Catalogo por defecto identico al de causales.php, usado cuando
+   CAUSALES_ANULACION no esta disponible. */
+const defaultCausals = [
+  'Error en el valor del formulario', 'Error en el numero de serie', 'Error en la loteria',
+  'Formulario impreso en papel blanco', 'Impresion incompleta (termino de rollo)', 'Serie ilegible',
+  'Informacion remontada', 'Informacion incompleta', 'No imprimio la serie',
+  'Formulario no llego fisico', 'Formulario cortado o danado', 'Impreso en lapiz', 'Otros',
+];
+
+/* El legado exportaba un .xls y anteponia un apostrofo a los valores que
+   empiezan por = + - @ para que la hoja de calculo no los ejeculte. */
+function csvCell(value: unknown) {
+  const text = String(value ?? '');
+  const safe = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>) {
+  if (rows.length === 0) return;
+  const lines = [headers.map(csvCell).join(';'), ...rows.map((line) => line.map(csvCell).join(';'))];
+  const url = URL.createObjectURL(new Blob(['\ufeff', lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const navigation: NavEntry[] = [
   { path: '/register', label: 'Registrar anulacion', permission: 'forms:register', icon: Boxes },
   { path: '/records/servired', label: 'Formularios SERVIRED', permission: 'records:central', icon: Archive },
@@ -98,7 +155,6 @@ function Shell() {
         <Route path="/portfolio/users" element={<Guard permission="portfolio:manage"><Portfolio /></Guard>} />
         <Route path="/raspe" element={<Guard permission="raspe:search"><Raspe /></Guard>} />
         <Route path="/raspe/history" element={<Guard permission="raspe:search"><RaspeHistory /></Guard>} />
-        <Route path="/raspe/history" element={<Guard permission="raspe:search"><RaspeHistory /></Guard>} />
         <Route path="/users" element={<Guard permission="users:manage"><UsersPage /></Guard>} />
         <Route path="/profiles" element={<Guard permission="profiles:manage"><ProfilesPage /></Guard>} />
         <Route path="/password" element={<ChangePassword />} />
@@ -130,7 +186,7 @@ function Register() {
   const [feedback, setFeedback] = useState('');
   const [busy, setBusy] = useState(false);
   const canSelectZone = ['CENTRAL_DE_SERVICIOS', 'TECNICO-SERVIRED', 'TECNICO-MULTIRED'].includes(user?.profile ?? '');
-  useEffect(() => { void api.get<string[]>('/causals').then((result) => setCausals(result.data)).catch(() => setCausals(['Otros'])); }, []);
+  useEffect(() => { void api.get<string[]>('/causals').then((result) => setCausals(result.data)).catch(() => setCausals(defaultCausals)); }, []);
   const search = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -162,7 +218,7 @@ function Register() {
 function Records() {
   const { view = '' } = useParams();
   const { user } = useAuth();
-  const recordPermission: Record<string, string> = { servired: 'records:central', multired: 'records:central', ti: 'records:ti', audit: 'records:audit', 'audit-operations': 'records:audit-operations', commercial: 'records:commercial', accounting: 'records:accounting' };
+  const recordPermission: Record<string, string> = { servired: 'records:central', multired: 'records:central', ti: 'records:ti', audit: 'records:audit', 'audit-operations': 'records:audit-operations', commercial: 'records:commercial', accounting: 'records:accounting', portfolio: 'records:portfolio' };
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [q, setQ] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -178,7 +234,7 @@ function Records() {
     catch { setNotice('No fue posible cargar los registros.'); }
   };
   useEffect(() => { void load(); }, [view]);
-  const columns = rows.length ? Object.keys(rows[0]).filter((key) => !['PREMIO'].includes(key)).slice(0, 12) : [];
+  const exportPage = () => downloadCsv(`anulados-${view}.csv`, recordColumns.map((item) => item.label), rows.map((row) => recordColumns.map((item) => row[item.column])));
   const saveAction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); if (!selected) return;
     const data = new FormData(event.currentTarget);
@@ -193,11 +249,11 @@ function Records() {
     } catch (requestError) { setNotice((requestError as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'No se pudieron guardar los cambios.'); }
   };
   return <section><PageHeading eyebrow="CONSULTA Y SEGUIMIENTO" title={title} description="Registros disponibles segun tu perfil." />
-    <form className="filter-bar compact" onSubmit={(event) => { event.preventDefault(); void load(1); }}>{view === 'audit' && <><label>Desde<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Hasta<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label></>}<label>Buscar<input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Serie, documento, nombre o motivo" /></label><button className="button button-light"><Search size={16} />Buscar</button><button type="button" className="button button-light" onClick={() => void load()}><Activity size={16} />Actualizar</button></form>
+    <form className="filter-bar compact" onSubmit={(event) => { event.preventDefault(); void load(1); }}>{view === 'audit' && <><label>Desde<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label><label>Hasta<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label></>}<label>Buscar<input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Serie, documento, nombre o motivo" /></label><button className="button button-light"><Search size={16} />Buscar</button><button type="button" className="button button-light" onClick={() => void load()}><Activity size={16} />Actualizar</button><button type="button" className="button button-light" onClick={exportPage} disabled={rows.length === 0}><FileBarChart size={16} />Exportar pagina</button></form>
     {notice && <p className="notice">{notice}</p>}
-    <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column}>{column.replaceAll('_',' ')}</th>)}{view !== 'portfolio' && <th>Accion</th>}</tr></thead><tbody>{rows.map((row,index) => { const today = new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date()); const canEdit = view !== 'portfolio' && (!['servired','multired','ti'].includes(view) || row.FECHA === today); return <tr key={`${row.CODIGO}-${index}`}>{columns.map((column) => <td key={column}>{String(row[column] ?? '')}</td>)}{view !== 'portfolio' && <td>{canEdit ? <button className="table-action" onClick={() => setSelected(row)}>Abrir</button> : <span className="state">Solo lectura</span>}</td>}</tr>; })}{rows.length === 0 && <tr><td colSpan={columns.length + (view === 'portfolio' ? 0 : 1)} className="empty-cell">No hay registros para mostrar.</td></tr>}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr>{recordColumns.map((item) => <th key={item.column}>{item.label}</th>)}{view !== 'portfolio' && <th>Accion</th>}</tr></thead><tbody>{rows.map((row,index) => { const today = new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date()); const canEdit = view !== 'portfolio' && (!['servired','multired','ti'].includes(view) || row.FECHA === today); return <tr key={`${row.CODIGO}-${index}`}>{recordColumns.map((item) => <td key={item.column}>{String(row[item.column] ?? '')}</td>)}{view !== 'portfolio' && <td>{canEdit ? <button className="table-action" onClick={() => setSelected(row)}>Abrir</button> : <span className="state">Solo lectura</span>}</td>}</tr>; })}{rows.length === 0 && <tr><td colSpan={recordColumns.length + (view === 'portfolio' ? 0 : 1)} className="empty-cell">No hay registros para mostrar.</td></tr>}</tbody></table></div>
     <div className="pager"><span>{total} registros · pagina {page}</span><div><button className="button button-light" disabled={page <= 1} onClick={() => void load(page - 1)}>Anterior</button><button className="button button-light" disabled={page * 50 >= total} onClick={() => void load(page + 1)}>Siguiente</button></div></div>
-    {selected && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><form className="dialog-panel" onSubmit={saveAction}><div className="dialog-head"><div><span className="eyebrow">SERIE</span><h2>{String(selected.SERIE ?? '')}</h2></div><button type="button" className="icon-button" onClick={() => setSelected(null)}>×</button></div><div className="detail-grid">{['FECHA','VALOR','MOTIVO','NOTA','OBSERVACIONES_REGISTRO'].filter((key) => selected[key] !== undefined).map((key) => <div key={key}><span>{key.replaceAll('_',' ')}</span><strong>{String(selected[key] ?? '')}</strong></div>)}</div>
+    {selected && <div className="overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><form className="dialog-panel" onSubmit={saveAction}><div className="dialog-head"><div><span className="eyebrow">SERIE</span><h2>{String(selected.SERIE ?? '')}</h2></div><button type="button" className="icon-button" onClick={() => setSelected(null)}>×</button></div><div className="detail-grid">{recordDetailFields.filter((key) => selected[key] !== undefined && selected[key] !== null && String(selected[key] ?? '') !== '').map((key) => <div key={key}><span>{key.replaceAll('_',' ')}</span><strong>{String(selected[key] ?? '')}</strong></div>)}</div>
       {view.startsWith('audit') ? <><label>Observacion de auditoria<textarea name="observacionesAuditoria" rows={4} required /></label><label>Decision<select name="state"><option value="AUTORIZADO">Autorizado</option><option value="COBRAR">Enviar a cobro</option></select></label></> : view === 'commercial' ? <label>Estado de entrega<select name="estadoEntrega"><option value="S">Recibido</option><option value="N">No recibido</option></select></label> : view === 'accounting' ? <label>Estado contable<select name="state"><option value="ABONADO">Abonado</option><option value="NO ABONADO">No abonado</option></select></label> : <><label>Motivo<select name="motivo"><option>EN BLANCO</option><option>BIEN IMPRESO</option><option>MAL IMPRESO</option><option>NO IMPRESO</option></select></label><label>Causal<input name="nota" defaultValue={String(selected.NOTA ?? '')} required /></label></>}
       <button className="button button-primary">Guardar decision</button></form></div>}
   </section>;
@@ -244,24 +300,37 @@ function RaspeHistory() {
     try { const response = await api.get('/raspe/history', { params: { code } }); setResult(response.data); setNotice(''); }
     catch { setNotice('No fue posible consultar el historial.'); }
   };
-  return <section><PageHeading eyebrow="APLICACIONES" title="Ventas y pagos de raspa" description="Busca operaciones registradas por código y zona."/><form className="filter-bar" onSubmit={search}><label>Código de raspa<input value={code} onChange={(event)=>setCode(event.target.value)} placeholder="39628-..." required /></label><button className="button button-primary"><Search size={16}/>Buscar</button></form>{notice&&<p className="notice">{notice}</p>}{[['Ventas',result.sales],['Pagos',result.payments]].map(([title,items])=><section className="table-section" key={String(title)}><h2>{String(title)}</h2><div className="table-wrap"><table><thead><tr>{(items as Array<Record<string,unknown>>)[0]?Object.keys((items as Array<Record<string,unknown>>)[0]).map((key)=><th key={key}>{key}</th>):<th>Sin resultados</th>}</tr></thead><tbody>{(items as Array<Record<string,unknown>>).map((row,index)=><tr key={index}>{Object.keys(row).map((key)=><td key={key}>{String(row[key]??'')}</td>)}</tr>)}</tbody></table></div></section>)}</section>;
+  const exportRaspe = (kind: string, items: Array<Record<string, unknown>>) => {
+    const headers = items[0] ? Object.keys(items[0]) : [];
+    downloadCsv(`raspas-${kind}.csv`, headers, items.map((row) => headers.map((header) => row[header])));
+  };
+  return <section><PageHeading eyebrow="APLICACIONES" title="Ventas y pagos de raspa" description="Busca operaciones registradas por código y zona."/><form className="filter-bar" onSubmit={search}><label>Código de raspa<input value={code} onChange={(event)=>setCode(event.target.value)} placeholder="39628-..." required /></label><button className="button button-primary"><Search size={16}/>Buscar</button><button type="button" className="button button-light" disabled={result.sales.length === 0} onClick={() => exportRaspe('vendidos', result.sales)}><FileBarChart size={16}/>Exportar ventas</button><button type="button" className="button button-light" disabled={result.payments.length === 0} onClick={() => exportRaspe('pagados', result.payments)}><FileBarChart size={16}/>Exportar pagos</button></form>{notice&&<p className="notice">{notice}</p>}{[['Ventas',result.sales],['Pagos',result.payments]].map(([title,items])=><section className="table-section" key={String(title)}><h2>{String(title)}</h2><div className="table-wrap"><table><thead><tr>{(items as Array<Record<string,unknown>>)[0]?Object.keys((items as Array<Record<string,unknown>>)[0]).map((key)=><th key={key}>{key}</th>):<th>Sin resultados</th>}</tr></thead><tbody>{(items as Array<Record<string,unknown>>).map((row,index)=><tr key={index}>{Object.keys(row).map((key)=><td key={key}>{String(row[key]??'')}</td>)}</tr>)}</tbody></table></div></section>)}</section>;
 }
 
 function Portfolio() {
+  const portfolioColumns = ['USUARIO', 'CARTERA', 'SALDO', 'ESTADO', 'LOGIN', 'EMPRESA', 'FECHASYS', 'VERSION'];
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [query, setQuery] = useState('');
-  const load = async () => { const result = await api.get<{ rows: Array<Record<string,unknown>> }>('/portfolio', { params: { q: query } }); setRows(result.data.rows); };
+  const [notice, setNotice] = useState('');
+  const load = async () => {
+    try { const result = await api.get<{ rows: Array<Record<string,unknown>> }>('/portfolio', { params: { q: query } }); setRows(result.data.rows); setNotice(''); }
+    catch (error) { setNotice((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'No fue posible consultar los usuarios de cartera.'); }
+  };
+  const toggle = async (row: Record<string, unknown>) => {
+    try { await api.patch(`/portfolio/${encodeURIComponent(String(row.USUARIO))}`, { active: row.ESTADO === 'S' ? 'N' : 'S' }); await load(); }
+    catch (error) { setNotice((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'No fue posible actualizar el usuario de cartera.'); }
+  };
   useEffect(() => { void load(); }, []);
-  return <section><PageHeading eyebrow="CARTERA" title="Usuarios de cartera" description="Consulta y habilita usuarios de cartera." /><form className="filter-bar compact" onSubmit={(event) => { event.preventDefault(); void load(); }}><label>Usuario o empresa<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-primary"><Search size={16} />Buscar</button></form><div className="table-wrap"><table><thead><tr>{['USUARIO','CARTERA','SALDO','ESTADO','LOGIN','EMPRESA','FECHASYS','Accion'].map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>{rows.map((row,index) => <tr key={index}>{['USUARIO','CARTERA','SALDO','ESTADO','LOGIN','EMPRESA','FECHASYS'].map((key) => <td key={key}>{String(row[key] ?? '')}</td>)}<td><button className="table-action" onClick={async () => { await api.patch(`/portfolio/${encodeURIComponent(String(row.USUARIO))}`, { active: row.ESTADO === 'S' ? 'N' : 'S' }); await load(); }}>{row.ESTADO === 'S' ? 'Desactivar' : 'Activar'}</button></td></tr>)}</tbody></table></div></section>;
+  return <section><PageHeading eyebrow="CARTERA" title="Usuarios de cartera" description="Consulta y habilita usuarios de cartera." /><form className="filter-bar compact" onSubmit={(event) => { event.preventDefault(); void load(); }}><label>Usuario o empresa<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-primary"><Search size={16} />Buscar</button><button type="button" className="button button-light" disabled={rows.length === 0} onClick={() => downloadCsv('cartera.csv', portfolioColumns, rows.map((row) => portfolioColumns.map((key) => row[key])))}><FileBarChart size={16} />Exportar CSV</button></form>{notice && <p className="notice">{notice}</p>}<div className="table-wrap"><table><thead><tr>{portfolioColumns.map((key) => <th key={key}>{key}</th>)}<th>Accion</th></tr></thead><tbody>{rows.map((row,index) => <tr key={index}>{portfolioColumns.map((key) => <td key={key}>{String(row[key] ?? '')}</td>)}<td><button className="table-action" onClick={() => void toggle(row)}>{row.ESTADO === 'S' ? 'Desactivar' : 'Activar'}</button></td></tr>)}{rows.length === 0 && <tr><td colSpan={portfolioColumns.length + 1} className="empty-cell">No hay usuarios de cartera para mostrar.</td></tr>}</tbody></table></div><div className="pager"><span>Consulta de solo lectura: cartera no registra ni modifica causales.</span></div></section>;
 }
 
 function UsersPage() {
   const [users, setUsers] = useState<Array<Record<string, unknown> & { legacyLogin?: string | null }>>([]);
-  const [profiles, setProfiles] = useState<Array<{ id: number; name: string }>>([]);
+  const [profiles, setProfiles] = useState<Array<{ id: number; name: string; permissions: string[] }>>([]);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<(Record<string, unknown> & { legacyLogin?: string | null }) | null>(null);
   const [notice, setNotice] = useState('');
-  const load = async () => { const [u,p] = await Promise.all([api.get('/admin/users', { params: { q: query } }), api.get('/admin/profiles')]); setUsers(u.data); setProfiles(p.data); };
+  const load = async () => { try { const [u,p] = await Promise.all([api.get('/admin/users', { params: { q: query } }), api.get('/admin/profiles')]); setUsers(u.data); setProfiles(p.data); setNotice(''); } catch { setNotice('No fue posible cargar los usuarios.'); } };
   useEffect(() => { void load(); }, []);
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); const data = new FormData(event.currentTarget); const body: Record<string,unknown> = { username: data.get('username'), displayName: data.get('displayName'), profileId: Number(data.get('profileId')), active: data.get('active') === '1' };
@@ -269,7 +338,7 @@ function UsersPage() {
     try { if (editing?.id) await api.patch(`/admin/users/${editing.id}`, { username: body.username, displayName: body.displayName, profileId: body.profileId, active: body.active, ...(password ? { password } : {}) }); else await api.post('/admin/users', body); setEditing(null); setNotice('Usuario guardado.'); await load(); }
     catch (error) { setNotice((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'No se pudo guardar el usuario.'); }
   };
-  return <section><PageHeading eyebrow="ADMINISTRACION / APLICACIONES" title="Usuarios" description="Cuentas y perfiles de acceso. Las contrasenas nunca se muestran." /><div className="filter-bar compact"><label>Buscar<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-light" onClick={() => void load()}><Search size={16} />Buscar</button><button className="button button-primary" onClick={() => setEditing({})}>Nuevo usuario</button></div>{notice && <p className="notice">{notice}</p>}<div className="table-wrap"><table><thead><tr><th>Usuario V2</th><th>Login legado</th><th>Nombre</th><th>Perfil</th><th>Estado</th><th>Origen</th><th></th></tr></thead><tbody>{users.map((user) => <tr key={String(user.id)}><td>{String(user.username)}</td><td>{String(user.legacyLogin ?? '')}</td><td>{String(user.displayName)}</td><td><span className="tag">{String(user.profile)}</span></td><td><span className={user.active ? 'state state-on' : 'state state-off'}>{user.active ? 'Activo' : 'Inactivo'}</span></td><td>{user.legacyId ? 'Importado' : 'Local'}</td><td><button className="table-action" onClick={() => setEditing({ ...user, active: Boolean(user.active) })}>Editar</button></td></tr>)}</tbody></table></div>{editing && <div className="overlay"><form className="dialog-panel" onSubmit={save}><div className="dialog-head"><div><span className="eyebrow">GESTION DE CUENTA</span><h2>{editing.id ? 'Editar usuario' : 'Crear usuario'}</h2></div><button type="button" className="icon-button" onClick={() => setEditing(null)}>×</button></div><label>Usuario<input name="username" defaultValue={String(editing.username ?? '')} required /></label>{editing.legacyLogin && <p className="notice">Login de origen: {String(editing.legacyLogin)}. Las colisiones importadas quedan inactivas hasta ser revisadas.</p>}<label>Nombre<input name="displayName" defaultValue={String(editing.displayName ?? '')} required /></label><label>Perfil<select name="profileId" defaultValue={String(editing.profileId ?? profiles[0]?.id ?? '')}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label><label>Contrasena<input name="password" type="password" minLength={8} required={!editing.id} autoComplete="new-password" /></label><label>Estado<select name="active" defaultValue={editing.active === false ? '0' : '1'}><option value="1">Activo</option><option value="0">Inactivo</option></select></label><button className="button button-primary">Guardar usuario</button></form></div>}</section>;
+  return <section><PageHeading eyebrow="ADMINISTRACION / APLICACIONES" title="Usuarios" description="Cuentas y perfiles de acceso. Las contrasenas nunca se muestran." /><div className="filter-bar compact"><label>Buscar<input value={query} onChange={(event) => setQuery(event.target.value)} /></label><button className="button button-light" onClick={() => void load()}><Search size={16} />Buscar</button><button className="button button-primary" onClick={() => setEditing({})}>Nuevo usuario</button></div>{notice && <p className="notice">{notice}</p>}<div className="table-wrap"><table><thead><tr><th>Usuario V2</th><th>Login legado</th><th>Nombre</th><th>Perfil</th><th>Estado</th><th>Origen</th><th></th></tr></thead><tbody>{users.map((user) => <tr key={String(user.id)}><td>{String(user.username)}</td><td>{String(user.legacyLogin ?? '')}</td><td>{String(user.displayName)}</td><td><span className="tag">{String(user.profile)}</span></td><td><span className={user.active ? 'state state-on' : 'state state-off'}>{user.active ? 'Activo' : 'Inactivo'}</span></td><td>{user.legacyId ? 'Importado' : 'Local'}</td><td><button className="table-action" onClick={() => setEditing({ ...user, active: Boolean(user.active) })}>Editar</button></td></tr>)}</tbody></table></div>{editing && <div className="overlay"><form className="dialog-panel" onSubmit={save}><div className="dialog-head"><div><span className="eyebrow">GESTION DE CUENTA</span><h2>{editing.id ? 'Editar usuario' : 'Crear usuario'}</h2></div><button type="button" className="icon-button" onClick={() => setEditing(null)}>×</button></div><label>Usuario<input name="username" defaultValue={String(editing.username ?? '')} required /></label>{editing.legacyLogin && <p className="notice">Login de origen: {String(editing.legacyLogin)}. Las colisiones importadas quedan inactivas hasta ser revisadas.</p>}<label>Nombre<input name="displayName" defaultValue={String(editing.displayName ?? '')} required /></label><label>Perfil<select name="profileId" defaultValue={String(editing.profileId ?? profiles[0]?.id ?? '')}>{profiles.map((profile) => <option key={profile.id} value={profile.id} disabled={profile.permissions.length === 0}>{profile.name}{profile.permissions.length === 0 ? ' (sin permisos)' : ` (${profile.permissions.length})`}</option>)}</select></label><label>Contrasena<input name="password" type="password" minLength={8} required={!editing.id} autoComplete="new-password" /></label><label>Estado<select name="active" defaultValue={editing.active === false ? '0' : '1'}><option value="1">Activo</option><option value="0">Inactivo</option></select></label><button className="button button-primary">Guardar usuario</button></form></div>}</section>;
 }
 
 function ProfilesPage() {
@@ -290,7 +359,6 @@ function ChangePassword() {
   return <section><PageHeading eyebrow="CUENTA" title="Cambiar contrasena" description="La contrasena se almacena cifrada en el sistema V2."/><form className="settings-form" onSubmit={submit}><label>Contrasena actual<input name="currentPassword" type="password" required/></label><label>Nueva contrasena<input name="newPassword" type="password" minLength={8} required/></label><label>Confirmar contrasena<input name="confirmPassword" type="password" minLength={8} required/></label>{notice&&<p className="notice">{notice}</p>}<button className="button button-primary">Actualizar</button></form></section>;
 }
 
-function Reports() { const { report }=useParams(); return <section><PageHeading eyebrow="INFORMES" title={String(report ?? 'Reportes')} description="Informacion filtrada segun tu perfil."/><p className="notice">Selecciona un informe desde el menu de reportes habilitado para tu perfil.</p></section>; }
 function PageHeading({eyebrow,title,description}:{eyebrow:string;title:string;description:string}) { return <header className="page-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></header>; }
 function NotFound() { return <section className="not-found"><span className="eyebrow">404 / SIN ACCESO</span><h1>Esta vista no esta disponible.</h1><Link to="/">Volver al inicio</Link></section>; }
 
@@ -300,16 +368,8 @@ function ReportsData() {
   const [message, setMessage] = useState('');
   useEffect(() => { void api.get(`/reports/${report}`).then((response) => setRows(response.data.rows)).catch((error) => setMessage((error as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'No fue posible cargar el informe.')); }, [report]);
   const exportCsv = () => {
-    if (!rows.length) return;
-    const headers = Object.keys(rows[0]);
-    const csv = [headers, ...rows.map((row) => headers.map((header) => String(row[header] ?? '')))]
-      .map((line) => line.map((value) => `"${value.replaceAll('"', '""')}"`).join(';')).join('\r\n');
-    const url = URL.createObjectURL(new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${report}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const headers = Object.keys(rows[0] ?? {});
+    downloadCsv(`${report}.csv`, headers.map((header) => header.replaceAll('_', ' ')), rows.map((row) => headers.map((header) => row[header])));
   };
   return <section><PageHeading eyebrow="INFORMES" title={report.replaceAll('-', ' ')} description="Consulta y descarga el informe disponible para tu perfil." />{message && <p className="notice">{message}</p>}<div className="filter-bar compact"><span>{rows.length} registros</span><button type="button" className="button button-primary" onClick={exportCsv} disabled={!rows.length}><FileBarChart size={16} />Exportar CSV</button></div><div className="table-wrap"><table><thead><tr>{rows[0] ? Object.keys(rows[0]).map((key) => <th key={key}>{key.replaceAll('_', ' ')}</th>) : <th>Sin resultados</th>}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{Object.keys(row).map((key) => <td key={key}>{String(row[key] ?? '')}</td>)}</tr>)}</tbody></table></div></section>;
 }

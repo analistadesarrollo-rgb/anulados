@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { authDb } from '../db.js';
-import { env } from '../env.js';
+import { env, sessionTtlMs, sessionTtlSeconds } from '../env.js';
 import { requireSession, revokeSession } from '../middleware/session.js';
 import type { AppUserRow, AuthenticatedRequest } from '../types.js';
 
@@ -27,14 +27,14 @@ authRouter.post('/login', async (req, res) => {
   if (!valid) return res.status(401).json({ message: 'Usuario o contrasena incorrectos o cuenta inactiva' });
 
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + sessionTtlMs);
   await authDb.execute('INSERT INTO app_sessions (id, user_id, expires_at) VALUES (?, ?, ?)', [sessionId, user.id, expiresAt]);
-  const token = jwt.sign({ sub: String(user.id), jti: sessionId }, env.JWT_SECRET, { expiresIn: '30m' });
+  const token = jwt.sign({ sub: String(user.id), jti: sessionId }, env.JWT_SECRET, { expiresIn: sessionTtlSeconds });
   res.cookie(env.JWT_COOKIE_NAME, token, {
     httpOnly: true,
     secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 30 * 60 * 1000,
+    maxAge: sessionTtlMs,
     path: '/',
   });
   return res.json({ message: 'Sesion iniciada' });

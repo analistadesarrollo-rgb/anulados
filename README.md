@@ -35,14 +35,19 @@ El dump actual contiene 19 grupos con login repetido (incluyendo diferencias de 
 1. Copia `.env.example` a `.env` y completa los secretos/conexiones.
 2. Instala Node.js 22+ y Docker Compose.
 3. Importa una copia del dump de usuarios con `npm run import-users -- <ruta-a-tbusuario.sql>` desde `api/`.
-4. Ejecuta `docker compose up --build`.
-5. Abre `http://localhost:8086`.
+4. Crea la primera cuenta administrativa con `npm run create-admin -- --username <usuario> --password <contrasena>` desde `api/`. Acepta `BOOTSTRAP_USERNAME` y `BOOTSTRAP_PASSWORD` para no dejar la contrasena en la linea de comandos; el perfil por defecto es `APLICACIONES` y el script revoca las sesiones abiertas de esa cuenta.
+5. Ejecuta `docker compose up --build`.
+6. Abre `http://localhost:8086`.
 
 No se incluyen usuarios, contrasenas ni credenciales reales en este repositorio. El importador lee el SQL de origen directamente y no lo conserva. Oracle Thin mode es el predeterminado; para servidores que requieran Oracle Client, coloca el Instant Client autorizado en `api/oracle-client/` y activa `DB_ORACLE_THICK_MODE`.
 
+Los once perfiles de `access-policy.json` se insertan al arrancar la API como perfiles de sistema, sin sobrescribir los permisos ya ajustados en la interfaz. Un perfil sin permisos deja la cuenta inutilizable porque el login exige al menos uno, por lo que la API rechaza asignarlo.
+
+La comparacion pantalla por pantalla con el sistema heredado esta en `docs/parity-legacy.md`.
+
 ## Jenkins
 
-Configura una credencial Jenkins de tipo Secret file con ID `CONTROL_ANULADOS_V2_ENV` y las variables de `.env.example`; configura el agente con Node.js 22 y Docker Compose. Se debe importar el dump de usuarios al volumen nuevo una sola vez antes de habilitar el servicio. El pipeline no importa el SQL automaticamente ni modifica `bdpersona`.
+Configura una credencial Jenkins de tipo Secret file con ID `CONTROL_ANULADOS_V2_ENV` y las variables de `.env.example`; configura el agente con Node.js 22 y Docker Compose. Se debe importar el dump de usuarios al volumen nuevo una sola vez antes de habilitar el servicio. El pipeline no importa el SQL automaticamente ni modifica `bdpersona`. Para una base recien creada, ejecuta `npm run create-admin` contra el volumen de autenticacion con las credenciales del agente: los perfiles de sistema se crean solos al arrancar la API, pero hace falta al menos una cuenta `APLICACIONES` para entrar.
 
 ## Verificacion
 
