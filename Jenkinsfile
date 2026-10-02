@@ -5,6 +5,7 @@ pipeline {
 
   parameters {
     booleanParam(name: 'IMPORT_INITIAL_USERS', defaultValue: false, description: 'Importar tbusuario.sql una sola vez a la base V2')
+    booleanParam(name: 'CREATE_BOOTSTRAP_ADMIN', defaultValue: false, description: 'Crear o restablecer la cuenta administrativa de arranque (BOOTSTRAP_USERNAME/BOOTSTRAP_PASSWORD del secret file)')
   }
 
   stages {
@@ -30,6 +31,21 @@ pipeline {
           if ! docker compose up -d --build --remove-orphans; then
             docker compose ps
             docker compose logs --no-color --tail=200 api auth-db
+            exit 1
+          fi
+        '''
+      }
+    }
+
+    stage('Initialize bootstrap admin (optional)') {
+      when { expression { return params.CREATE_BOOTSTRAP_ADMIN?.toString()?.toBoolean() } }
+      steps {
+        sh '''
+          if grep -qE '^BOOTSTRAP_USERNAME=.+' .env && grep -qE '^BOOTSTRAP_PASSWORD=.+' .env; then
+            docker compose run --rm --no-deps api npm run create-admin
+          else
+            echo "ERROR: faltan BOOTSTRAP_USERNAME o BOOTSTRAP_PASSWORD en el secret file CONTROL_ANULADOS_V2_ENV."
+            echo "       Edita ese credential en Manage Jenkins > Credentials y vuelve a ejecutar con CREATE_BOOTSTRAP_ADMIN."
             exit 1
           fi
         '''

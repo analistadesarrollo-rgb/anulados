@@ -47,7 +47,9 @@ La comparacion pantalla por pantalla con el sistema heredado esta en `docs/parit
 
 ## Jenkins
 
-Configura una credencial Jenkins de tipo Secret file con ID `CONTROL_ANULADOS_V2_ENV` y las variables de `.env.example`; configura el agente con Node.js 22 y Docker Compose. Se debe importar el dump de usuarios al volumen nuevo una sola vez antes de habilitar el servicio. El pipeline no importa el SQL automaticamente ni modifica `bdpersona`. Para una base recien creada, ejecuta `npm run create-admin` contra el volumen de autenticacion con las credenciales del agente: los perfiles de sistema se crean solos al arrancar la API, pero hace falta al menos una cuenta `APLICACIONES` para entrar.
+Configura una credencial Jenkins de tipo Secret file con ID `CONTROL_ANULADOS_V2_ENV` y las variables de `.env.example`; configura el agente con Node.js 22 y Docker Compose. Se debe importar el dump de usuarios al volumen nuevo una sola vez antes de habilitar el servicio. El pipeline no importa el SQL automaticamente ni modifica `bdpersona`.
+
+Los once perfiles de `access-policy.json` los crea la API al arrancar, pero hace falta al menos una cuenta `APLICACIONES` para entrar. Agrega `BOOTSTRAP_USERNAME` y `BOOTSTRAP_PASSWORD` al secret file `CONTROL_ANULADOS_V2_ENV` y ejecuta el build marcando `CREATE_BOOTSTRAP_ADMIN`: la etapa opcional corre `npm run create-admin` dentro del contenedor, que crea o restablece esa cuenta y revoca sus sesiones abiertas. Escribe la contrasena directamente en el credential de Jenkins; nunca en el repositorio ni en un parametro de build, porque quedaria en el log. Repite la operacion cuando necesites restablecer la clave.
 
 ## Verificacion
 
